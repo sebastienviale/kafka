@@ -373,11 +373,11 @@ public class StreamThread extends Thread implements ProcessingThread {
 
         final String threadId = clientId + THREAD_ID_SUBSTRING + threadIdx;
         final String stateUpdaterId = threadId.replace(THREAD_ID_SUBSTRING, STATE_UPDATER_ID_SUBSTRING);
-        final String effectiveThreadId = stateUpdaterEnabled ? stateUpdaterId : threadId;
+        final String restorationThreadId = stateUpdaterEnabled ? stateUpdaterId : threadId;
 
         final String logPrefix = String.format("stream-thread [%s] ", threadId);
         final LogContext logContext = new LogContext(logPrefix);
-        final LogContext effectiveLogContext = stateUpdaterEnabled ? new LogContext(String.format("state-updater [%s] ", effectiveThreadId)): logContext ;
+        final LogContext restorationLogContext = stateUpdaterEnabled ? new LogContext(String.format("state-updater [%s] ", restorationThreadId)): logContext ;
         final Logger log = logContext.logger(StreamThread.class);
 
         final ReferenceContainer referenceContainer = new ReferenceContainer();
@@ -387,13 +387,13 @@ public class StreamThread extends Thread implements ProcessingThread {
         referenceContainer.clientTags = config.getClientTags();
 
         log.info("Creating restore consumer client");
-        final Map<String, Object> restoreConsumerConfigs = config.getRestoreConsumerConfigs(restoreConsumerClientId(effectiveThreadId));
+        final Map<String, Object> restoreConsumerConfigs = config.getRestoreConsumerConfigs(restoreConsumerClientId(restorationThreadId));
         final Consumer<byte[], byte[]> restoreConsumer = clientSupplier.getRestoreConsumer(restoreConsumerConfigs);
 
         final StoreChangelogReader changelogReader = new StoreChangelogReader(
             time,
             config,
-            effectiveLogContext,
+            restorationLogContext,
             adminClient,
             restoreConsumer,
             userStateRestoreListener,
