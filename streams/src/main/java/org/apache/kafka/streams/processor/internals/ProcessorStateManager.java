@@ -541,14 +541,16 @@ public class ProcessorStateManager implements StateManager {
                         // do NOT wrap the error if it is actually caused by Streams itself
                         // In case of FailedProcessingException Do not keep the failed processing exception in the stack trace
                         if (exception instanceof FailedProcessingException)
-                            firstException = new StreamsException(exception.getCause());
+                            firstException = new ProcessorStateException(exception.getCause());
                         else if (exception instanceof StreamsException)
                             firstException = exception;
                         else
                             firstException = new ProcessorStateException(
                                 format("%sFailed to flush state store %s", logPrefix, store.name()), exception);
+                        log.error("Failed to flush cache of store {}: ", store.name(), firstException);
+                    } else {
+                        log.error("Failed to flush cache of store {}: ", store.name(), exception);
                     }
-                    log.error("Failed to flush state store {}: ", store.name(), exception.getCause());
                 }
             }
         }
@@ -579,7 +581,7 @@ public class ProcessorStateManager implements StateManager {
                         // do NOT wrap the error if it is actually caused by Streams itself
                         // In case of FailedProcessingException Do not keep the failed processing exception in the stack trace
                         if (exception instanceof FailedProcessingException) {
-                            firstException = new StreamsException(exception.getCause());
+                            firstException = new ProcessorStateException(exception.getCause());
                         } else if (exception instanceof StreamsException) {
                             firstException = exception;
                         } else {
@@ -588,8 +590,10 @@ public class ProcessorStateManager implements StateManager {
                                 exception
                             );
                         }
+                        log.error("Failed to flush cache of store {}: ", store.name(), firstException);
+                    } else {
+                        log.error("Failed to flush cache of store {}: ", store.name(), exception);
                     }
-                    log.error("Failed to flush cache of store {}: ", store.name(), exception.getCause());
                 }
             }
         }
@@ -627,14 +631,16 @@ public class ProcessorStateManager implements StateManager {
                         // do NOT wrap the error if it is actually caused by Streams itself
                         // In case of FailedProcessingException Do not keep the failed processing exception in the stack trace
                         if (exception instanceof FailedProcessingException)
-                            firstException = new StreamsException(exception.getCause());
+                            firstException = new ProcessorStateException(exception.getCause());
                         else if (exception instanceof StreamsException)
                             firstException = exception;
                         else
                             firstException = new ProcessorStateException(
                                 format("%sFailed to close state store %s", logPrefix, store.name()), exception);
+                        log.error("Failed to flush cache of store {}: ", store.name(), firstException);
+                    } else {
+                        log.error("Failed to flush cache of store {}: ", store.name(), exception);
                     }
-                    log.error("Failed to close state store {}: ", store.name(), exception.getCause());
                 }
             }
 
