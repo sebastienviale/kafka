@@ -27,6 +27,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
+import org.apache.kafka.streams.errors.internals.FailedProcessingException;
 import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
@@ -769,6 +770,38 @@ public class ProcessorStateManagerTest {
 
         final StreamsException thrown = assertThrows(StreamsException.class, stateManager::close);
         assertEquals(exception, thrown);
+    }
+
+    @Test
+    public void shouldThrowProcessorStateExceptionOnFlushIfStoreThrowsAFailedProcessingException() {
+        final RuntimeException exception = new RuntimeException("KABOOM!");
+        final ProcessorStateManager stateManager = getStateManager(Task.TaskType.ACTIVE);
+        final MockKeyValueStore stateStore = new MockKeyValueStore(persistentStoreName, true) {
+            @Override
+            public void flush() {
+                throw new FailedProcessingException("processor", exception);
+            }
+        };
+        stateManager.registerStore(stateStore, stateStore.stateRestoreCallback, null);
+
+        final ProcessorStateException thrown = assertThrows(ProcessorStateException.class, stateManager::flush);
+        assertEquals(exception, thrown.getCause());
+    }
+
+    @Test
+    public void shouldThrowProcessorStateExceptionOnCloseIfStoreThrowsAFailedProcessingException() {
+        final RuntimeException exception = new RuntimeException("KABOOM!");
+        final ProcessorStateManager stateManager = getStateManager(Task.TaskType.ACTIVE);
+        final MockKeyValueStore stateStore = new MockKeyValueStore(persistentStoreName, true) {
+            @Override
+            public void close() {
+                throw new FailedProcessingException("processor", exception);
+            }
+        };
+        stateManager.registerStore(stateStore, stateStore.stateRestoreCallback, null);
+
+        final ProcessorStateException thrown = assertThrows(ProcessorStateException.class, stateManager::close);
+        assertEquals(exception, thrown.getCause());
     }
 
     @Test
