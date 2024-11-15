@@ -39,6 +39,7 @@ import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.internals.CachedStateStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.streams.state.internals.StoreQueryUtils;
+import org.apache.kafka.test.MockCacheKeyValueStore;
 import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.MockRestoreCallback;
 import org.apache.kafka.test.TestUtils;
@@ -786,6 +787,24 @@ public class ProcessorStateManagerTest {
 
         final ProcessorStateException thrown = assertThrows(ProcessorStateException.class, stateManager::flush);
         assertEquals(exception, thrown.getCause());
+        assertFalse(exception.getMessage().contains("FailedProcessingException"));
+    }
+
+    @Test
+    public void shouldThrowProcessorStateExceptionOnFlushCacheIfStoreThrowsAFailedProcessingException() {
+        final RuntimeException exception = new RuntimeException("KABOOM!");
+        final ProcessorStateManager stateManager = getStateManager(Task.TaskType.ACTIVE);
+        final MockCacheKeyValueStore stateStore = new MockCacheKeyValueStore(persistentStoreName, true) {
+            @Override
+            public void flushCache() {
+                throw new FailedProcessingException("processor", exception);
+            }
+        };
+        stateManager.registerStore(stateStore, stateStore.stateRestoreCallback, null);
+
+        final ProcessorStateException thrown = assertThrows(ProcessorStateException.class, stateManager::flushCache);
+        assertEquals(exception, thrown.getCause());
+        assertFalse(exception.getMessage().contains("FailedProcessingException"));
     }
 
     @Test
@@ -802,6 +821,7 @@ public class ProcessorStateManagerTest {
 
         final ProcessorStateException thrown = assertThrows(ProcessorStateException.class, stateManager::close);
         assertEquals(exception, thrown.getCause());
+        assertFalse(exception.getMessage().contains("FailedProcessingException"));
     }
 
     @Test

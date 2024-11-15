@@ -541,7 +541,9 @@ public class ProcessorStateManager implements StateManager {
                         // do NOT wrap the error if it is actually caused by Streams itself
                         // In case of FailedProcessingException Do not keep the failed processing exception in the stack trace
                         if (exception instanceof FailedProcessingException)
-                            firstException = new ProcessorStateException(exception.getCause());
+                            firstException = new ProcessorStateException(
+                                format("%sFailed to flush state store %s", logPrefix, store.name()),
+                                exception.getCause());
                         else if (exception instanceof StreamsException)
                             firstException = exception;
                         else
@@ -581,7 +583,9 @@ public class ProcessorStateManager implements StateManager {
                         // do NOT wrap the error if it is actually caused by Streams itself
                         // In case of FailedProcessingException Do not keep the failed processing exception in the stack trace
                         if (exception instanceof FailedProcessingException) {
-                            firstException = new ProcessorStateException(exception.getCause());
+                            firstException = new ProcessorStateException(
+                                format("%sFailed to flush state store %s", logPrefix, store.name()),
+                                exception.getCause());
                         } else if (exception instanceof StreamsException) {
                             firstException = exception;
                         } else {
@@ -631,7 +635,9 @@ public class ProcessorStateManager implements StateManager {
                         // do NOT wrap the error if it is actually caused by Streams itself
                         // In case of FailedProcessingException Do not keep the failed processing exception in the stack trace
                         if (exception instanceof FailedProcessingException)
-                            firstException = new ProcessorStateException(exception.getCause());
+                            firstException = new ProcessorStateException(
+                                format("%sFailed to flush state store %s", logPrefix, store.name()),
+                                exception.getCause());
                         else if (exception instanceof StreamsException)
                             firstException = exception;
                         else
