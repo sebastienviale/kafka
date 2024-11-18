@@ -19,9 +19,9 @@ package org.apache.kafka.test;
 import org.apache.kafka.streams.state.internals.CacheFlushListener;
 import org.apache.kafka.streams.state.internals.CachedStateStore;
 
-public class MockCacheKeyValueStore extends MockKeyValueStore implements CachedStateStore<Object, Object> {
+public class MockCachedKeyValueStore extends MockKeyValueStore implements CachedStateStore<Object, Object> {
 
-    public MockCacheKeyValueStore(String name, boolean persistent) {
+    public MockCachedKeyValueStore(String name, boolean persistent) {
         super(name, persistent);
     }
 

@@ -39,7 +39,7 @@ import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.internals.CachedStateStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.streams.state.internals.StoreQueryUtils;
-import org.apache.kafka.test.MockCacheKeyValueStore;
+import org.apache.kafka.test.MockCachedKeyValueStore;
 import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.MockRestoreCallback;
 import org.apache.kafka.test.TestUtils;
@@ -59,6 +59,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -788,13 +789,15 @@ public class ProcessorStateManagerTest {
         final ProcessorStateException thrown = assertThrows(ProcessorStateException.class, stateManager::flush);
         assertEquals(exception, thrown.getCause());
         assertFalse(exception.getMessage().contains("FailedProcessingException"));
+        assertFalse(Arrays.stream(thrown.getStackTrace()).anyMatch(
+            element -> element.getClassName().contains(FailedProcessingException.class.getSimpleName())));
     }
 
     @Test
     public void shouldThrowProcessorStateExceptionOnFlushCacheIfStoreThrowsAFailedProcessingException() {
         final RuntimeException exception = new RuntimeException("KABOOM!");
         final ProcessorStateManager stateManager = getStateManager(Task.TaskType.ACTIVE);
-        final MockCacheKeyValueStore stateStore = new MockCacheKeyValueStore(persistentStoreName, true) {
+        final MockCachedKeyValueStore stateStore = new MockCachedKeyValueStore(persistentStoreName, true) {
             @Override
             public void flushCache() {
                 throw new FailedProcessingException("processor", exception);
@@ -805,6 +808,9 @@ public class ProcessorStateManagerTest {
         final ProcessorStateException thrown = assertThrows(ProcessorStateException.class, stateManager::flushCache);
         assertEquals(exception, thrown.getCause());
         assertFalse(exception.getMessage().contains("FailedProcessingException"));
+        assertFalse(Arrays.stream(thrown.getStackTrace()).anyMatch(
+            element -> element.getClassName().contains(FailedProcessingException.class.getSimpleName())));
+
     }
 
     @Test
@@ -822,6 +828,8 @@ public class ProcessorStateManagerTest {
         final ProcessorStateException thrown = assertThrows(ProcessorStateException.class, stateManager::close);
         assertEquals(exception, thrown.getCause());
         assertFalse(exception.getMessage().contains("FailedProcessingException"));
+        assertFalse(Arrays.stream(thrown.getStackTrace()).anyMatch(
+            element -> element.getClassName().contains(FailedProcessingException.class.getSimpleName())));
     }
 
     @Test
