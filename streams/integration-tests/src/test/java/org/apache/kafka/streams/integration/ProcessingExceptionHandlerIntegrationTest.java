@@ -144,7 +144,7 @@ public class ProcessingExceptionHandlerIntegrationTest {
             final StreamsException exception = assertThrows(StreamsException.class,
                 () -> inputTopic.pipeKeyValueList(events, TIMESTAMP, Duration.ZERO));
 
-            assertTrue(exception.getMessage().contains("java.lang.RuntimeException: Exception should be handled by processing exception handler"));
+            assertTrue(exception.getMessage().contains("Failed to flush cache of store KSTREAM-AGGREGATE-STATE-STORE-0000000001"));
             assertEquals(expectedProcessedRecords.size(), processor.theCapturedProcessor().processed().size());
             assertIterableEquals(expectedProcessedRecords, processor.theCapturedProcessor().processed());
 
