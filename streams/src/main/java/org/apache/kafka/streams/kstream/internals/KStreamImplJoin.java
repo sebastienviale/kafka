@@ -273,10 +273,10 @@ class KStreamImplJoin {
     }
 
     private void addInternalResourceName(final StoreFactory windowStore) {
-        final InternalResourcesNaming thisInternalResourcesNaming = InternalResourcesNaming.build().withStateStore(windowStore.storeName());
+        final InternalResourcesNaming.Builder thisInternalResourcesNaming = InternalResourcesNaming.builder().withStateStore(windowStore.storeName());
         if (windowStore.loggingEnabled()) {
             thisInternalResourcesNaming.withChangelogTopic(windowStore.storeName() + "-changelog");
         }
-        builder.internalTopologyBuilder().addImplicitInternalNames(thisInternalResourcesNaming);
+        builder.internalTopologyBuilder().addImplicitInternalNames(thisInternalResourcesNaming.build());
     }
 }

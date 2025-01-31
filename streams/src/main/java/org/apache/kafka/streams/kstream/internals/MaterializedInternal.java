@@ -55,11 +55,11 @@ public final class MaterializedInternal<K, V, S extends StateStore> extends Mate
         if (storeName() == null && nameProvider != null) {
             storeName = nameProvider.newStoreName(generatedStorePrefix);
             if (nameProvider instanceof InternalStreamsBuilder) {
-                final InternalResourcesNaming internalResourcesNaming = InternalResourcesNaming.build().withStateStore(storeName);
+                final InternalResourcesNaming.Builder internalResourcesNaming = InternalResourcesNaming.builder().withStateStore(storeName);
                 if (loggingEnabled()) {
                     internalResourcesNaming.withChangelogTopic(storeName + "-changelog");
                 }
-                ((InternalStreamsBuilder) nameProvider).internalTopologyBuilder().addImplicitInternalNames(internalResourcesNaming);
+                ((InternalStreamsBuilder) nameProvider).internalTopologyBuilder().addImplicitInternalNames(internalResourcesNaming.build());
             }
         }
 

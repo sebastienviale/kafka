@@ -923,7 +923,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             repartitionTopicNamePrefix :
             repartitionTopicNamePrefix + REPARTITION_TOPIC_SUFFIX;
         if (!isRepartitionTopicNameProvidedByUser) {
-            builder.internalTopologyBuilder().addImplicitInternalNames(InternalResourcesNaming.build().withRepartitionTopic(repartitionTopicName));
+            builder.internalTopologyBuilder().addImplicitInternalNames(InternalResourcesNaming.builder().withRepartitionTopic(repartitionTopicName).build());
         }
 
         // Always need to generate the names to burn index counter for compatibility
@@ -1174,7 +1174,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             }
             final String bufferName = name + "-Buffer";
             if (joinedInternal.name() == null) {
-                final InternalResourcesNaming internalResourcesNaming = InternalResourcesNaming.build().withStateStore(bufferName).withChangelogTopic(bufferName + "-changelog");
+                final InternalResourcesNaming internalResourcesNaming = InternalResourcesNaming.builder().withStateStore(bufferName).withChangelogTopic(bufferName + "-changelog").build();
                 internalTopologyBuilder().addImplicitInternalNames(internalResourcesNaming);
             }
             bufferStoreBuilder = Optional.of(new RocksDBTimeOrderedKeyValueBuffer.Builder<>(

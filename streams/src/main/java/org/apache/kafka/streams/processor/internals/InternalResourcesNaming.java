@@ -18,30 +18,45 @@ package org.apache.kafka.streams.processor.internals;
 
 public final class InternalResourcesNaming {
 
-    private String repartitionTopic;
-    private String changelogTopic;
-    private String stateStore;
+    private final String repartitionTopic;
+    private final String changelogTopic;
+    private final String stateStore;
 
-    private InternalResourcesNaming() {
+    private InternalResourcesNaming(final Builder builder) {
+        this.repartitionTopic = builder.repartitionTopic;
+        this.changelogTopic = builder.changelogTopic;
+        this.stateStore = builder.stateStore;
     }
 
-    public static InternalResourcesNaming build() {
-        return new InternalResourcesNaming();
+    public static Builder builder() {
+        return new Builder();
     }
 
-    public InternalResourcesNaming withRepartitionTopic(final String repartitionTopic) {
-        this.repartitionTopic = repartitionTopic;
-        return this;
-    }
+    public static final class Builder {
+        private String repartitionTopic;
+        private String changelogTopic;
+        private String stateStore;
 
-    public InternalResourcesNaming withChangelogTopic(final String changelogTopic) {
-        this.changelogTopic = changelogTopic;
-        return this;
-    }
+        private Builder() {}
 
-    public InternalResourcesNaming withStateStore(final String stateStore) {
-        this.stateStore = stateStore;
-        return this;
+        public Builder withRepartitionTopic(final String repartitionTopic) {
+            this.repartitionTopic = repartitionTopic;
+            return this;
+        }
+
+        public Builder withChangelogTopic(final String changelogTopic) {
+            this.changelogTopic = changelogTopic;
+            return this;
+        }
+
+        public Builder withStateStore(final String stateStore) {
+            this.stateStore = stateStore;
+            return this;
+        }
+
+        public InternalResourcesNaming build() {
+            return new InternalResourcesNaming(this);
+        }
     }
 
     public String repartitionTopic() {
