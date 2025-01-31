@@ -277,6 +277,6 @@ class KStreamImplJoin {
         if (windowStore.loggingEnabled()) {
             thisInternalResourcesNaming.withChangelogTopic(windowStore.storeName() + "-changelog");
         }
-        builder.internalTopologyBuilder().addUnprovidedInternalTopics(thisInternalResourcesNaming);
+        builder.internalTopologyBuilder().addImplicitInternalNames(thisInternalResourcesNaming);
     }
 }

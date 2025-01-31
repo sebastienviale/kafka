@@ -492,8 +492,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             //passing in the name of the first repartition topic, re-used to create the optimized repartition topic
             final GraphNode optimizedSingleRepartition = createRepartitionNode(repartitionTopicName,
                                                                                groupedInternal.keySerde(),
-                                                                               groupedInternal.valueSerde(),
-                                                                               true);
+                                                                               groupedInternal.valueSerde());
 
             // re-use parent buildPriority to make sure the single repartition graph node is evaluated before downstream nodes
             optimizedSingleRepartition.setBuildPriority(keyChangingNode.buildPriority());
@@ -583,8 +582,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     private <K, V> OptimizableRepartitionNode<K, V> createRepartitionNode(final String repartitionTopicName,
                                                                           final Serde<K> keySerde,
-                                                                          final Serde<V> valueSerde,
-                                                                          final boolean isRepartitionTopicNameProvidedByUser) {
+                                                                          final Serde<V> valueSerde) {
 
         final OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder<K, V> repartitionNodeBuilder =
             OptimizableRepartitionNode.optimizableRepartitionNodeBuilder();
@@ -595,7 +593,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                 repartitionTopicName,
                 null,
                 repartitionNodeBuilder,
-                isRepartitionTopicNameProvidedByUser
+                true
         );
 
         // ensures setting the repartition topic to the name of the

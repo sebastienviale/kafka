@@ -559,7 +559,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         } else {
             storeName = builder.newStoreName(SUPPRESS_NAME);
             if (suppressedInternal.bufferConfig().logConfig() != null) {
-                internalTopologyBuilder().addUnprovidedInternalTopics(InternalResourcesNaming.build().withChangelogTopic(storeName + "-changelog"));
+                internalTopologyBuilder().addImplicitInternalNames(InternalResourcesNaming.build().withChangelogTopic(storeName + "-changelog"));
             }
         }
 

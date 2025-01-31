@@ -59,7 +59,7 @@ public final class MaterializedInternal<K, V, S extends StateStore> extends Mate
                 if (loggingEnabled()) {
                     internalResourcesNaming.withChangelogTopic(storeName + "-changelog");
                 }
-                ((InternalStreamsBuilder) nameProvider).internalTopologyBuilder().addUnprovidedInternalTopics(internalResourcesNaming);
+                ((InternalStreamsBuilder) nameProvider).internalTopologyBuilder().addImplicitInternalNames(internalResourcesNaming);
             }
         }
 

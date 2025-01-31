@@ -198,7 +198,7 @@ public class InternalTopologyBuilder {
 
     private boolean ensureExplicitInternalResourceNaming;
 
-    private Set<InternalResourcesNaming> unprovidedInternalNames = new LinkedHashSet<>();
+    private Set<InternalResourcesNaming> implicitInternalNames = new LinkedHashSet<>();
 
     public static class ReprocessFactory<KIn, VIn, KOut, VOut> {
 
@@ -2342,14 +2342,14 @@ public class InternalTopologyBuilder {
         );
     }
 
-    public void addUnprovidedInternalTopics(final InternalResourcesNaming internalResourcesNaming) {
-        unprovidedInternalNames.add(internalResourcesNaming);
+    public void addImplicitInternalNames(final InternalResourcesNaming internalResourcesNaming) {
+        implicitInternalNames.add(internalResourcesNaming);
     }
 
     public void checkUnprovidedNames() {
-        if (!unprovidedInternalNames.isEmpty()) {
+        if (!implicitInternalNames.isEmpty()) {
             final StringBuilder result = new StringBuilder();
-            for (final InternalResourcesNaming internalResourcesNaming : unprovidedInternalNames) {
+            for (final InternalResourcesNaming internalResourcesNaming : implicitInternalNames) {
                 if (!Utils.isBlank(internalResourcesNaming.changelogTopic())) {
                     result.append(String.format("Following changelog topic has not been named: %s%n", internalResourcesNaming.changelogTopic()));
                 }
