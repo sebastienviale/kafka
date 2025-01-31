@@ -2756,7 +2756,7 @@ public class StreamsBuilderTest {
             }
         }
         final KGroupedStream<String, String> groupedOne = streamOne.groupBy((k, v) -> v, grouped);
-        final KGroupedStream<String, String> groupedTwo = streamTwo.groupBy((k, v) -> v);
+        final KGroupedStream<String, String> groupedTwo = streamTwo.groupByKey();
 
         final Aggregator<String, String, String> agg1 = (key, value, aggregate) -> aggregate + value;
         final Aggregator<String, String, String> agg2 = (key, value, aggregate) -> aggregate + value;
