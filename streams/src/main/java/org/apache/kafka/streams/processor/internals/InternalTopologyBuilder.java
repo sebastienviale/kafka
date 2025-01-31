@@ -74,6 +74,7 @@ public class InternalTopologyBuilder {
 
     public InternalTopologyBuilder() {
         this.topologyName = null;
+        this.ensureExplicitInternalResourceNaming = false;
         this.processorWrapper = new NoOpProcessorWrapper();
     }
 
@@ -196,9 +197,9 @@ public class InternalTopologyBuilder {
 
     private boolean hasPersistentStores = false;
 
-    private boolean ensureExplicitInternalResourceNaming;
+    private final boolean ensureExplicitInternalResourceNaming;
 
-    private Set<InternalResourcesNaming> implicitInternalNames = new LinkedHashSet<>();
+    private final Set<InternalResourcesNaming> implicitInternalNames = new LinkedHashSet<>();
 
     public static class ReprocessFactory<KIn, VIn, KOut, VOut> {
 
