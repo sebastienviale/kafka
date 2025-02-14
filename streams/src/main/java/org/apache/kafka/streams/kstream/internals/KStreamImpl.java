@@ -1137,6 +1137,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                 joinedInternal.gracePeriod(),
                 name)
             );
+
+            if (joinedInternal.name() == null) {
+                final InternalResourcesNaming internalResourcesNaming = InternalResourcesNaming.builder().withStateStore(bufferName).withChangelogTopic(bufferName + "-changelog").build();
+                internalTopologyBuilder().addImplicitInternalNames(internalResourcesNaming);
+            }
         }
 
         final ProcessorSupplier<K, V, K, VOut> processorSupplier = new KStreamKTableJoin<>(

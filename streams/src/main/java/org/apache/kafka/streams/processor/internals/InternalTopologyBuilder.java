@@ -69,7 +69,6 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.streams.StreamsConfig.ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.PROCESSOR_WRAPPER_CLASS_CONFIG;
 
-
 public class InternalTopologyBuilder {
 
     public InternalTopologyBuilder() {
