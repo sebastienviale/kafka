@@ -175,7 +175,6 @@ class KStreamImplJoin {
             if (outerJoinWindowStore.isPresent()) {
                 addInternalResourceName(outerJoinWindowStore.get());
             }
-
         }
 
         // Time-shared between joins to keep track of the maximum stream time
