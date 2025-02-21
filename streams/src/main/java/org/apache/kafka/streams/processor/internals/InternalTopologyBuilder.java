@@ -2335,9 +2335,10 @@ public class InternalTopologyBuilder {
             if (ensureExplicitInternalResourceNaming) {
                 throw new TopologyException(result.toString());
             } else {
-                log.warn("Enforce explicit naming for all internal resources is set to false. If you want" +
-                    " to ensure that no internal resources have auto-generated names, please set the " +
-                    ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG + " configuration to true. {}", result);
+                log.warn("Explicit naming for internal resources is currently disabled. If you want to enforce" +
+                    " user-defined names for all internal resources, set " + ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG +
+                    " to true. Note: Changing internal resource names may require a full streams application reset for an" +
+                    " already deployed application. Consult the documentation on naming operators for more details. {}", result);
             }
         }
     }
