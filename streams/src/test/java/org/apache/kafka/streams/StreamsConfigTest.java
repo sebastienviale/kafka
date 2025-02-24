@@ -130,6 +130,7 @@ public class StreamsConfigTest {
                     case "DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC":
                     case "DSL_STORE_SUPPLIERS_CLASS_DOC":
                     case "PROCESSOR_WRAPPER_CLASS_DOC":
+                    case "ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_DOC":
                         continue;
 
                     // check for leaking, but already deprecated members
