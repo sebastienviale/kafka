@@ -257,11 +257,11 @@ public class TopologyTestDriver implements Closeable {
     private final StreamsConfigUtils.ProcessingMode processingMode;
 
     // Multi-partition lifecycle (declareTopic/init). The fields below back the new API only;
-    // the legacy single-partition execution path does not consult them and continues to work unchanged.
+    // the single-partition execution path does not consult them and continues to work unchanged.
     private final Map<String, Integer> declaredPartitionsByTopic = new HashMap<>();
     private boolean multiPartitionModeActive = false;
     private MultiPartitionRuntime runtime;
-    private final StreamsConfig multiSubStreamsConfig;
+    private final StreamsConfig streamsConfig;
     private final TaskConfig multiSubTaskConfig;
     private final StreamsMetricsImpl multiSubStreamsMetrics;
     private final ThreadCache multiSubCache;
@@ -400,7 +400,7 @@ public class TopologyTestDriver implements Closeable {
         setupTask(streamsConfig, streamsMetrics, cache, internalTopologyBuilder.topologyConfigs().getTaskConfig());
 
         // Capture references the multi-sub-topology runtime path needs at init() time.
-        this.multiSubStreamsConfig = streamsConfig;
+        this.streamsConfig = streamsConfig;
         this.multiSubTaskConfig = internalTopologyBuilder.topologyConfigs().getTaskConfig();
         this.multiSubStreamsMetrics = streamsMetrics;
         this.multiSubCache = cache;
@@ -850,7 +850,7 @@ public class TopologyTestDriver implements Closeable {
     }
 
     /**
-     * Declare the number of partitions for an input, output, or generated repartition topic.
+     * Declare the number of partitions for an input or an output topic.
      * Must be called before any record is piped. Subsequent calls with the same count are no-ops; calls
      * with a different count throw {@link IllegalArgumentException}. Calls after the driver has been
      * initialised throw {@link IllegalStateException}.
@@ -867,33 +867,26 @@ public class TopologyTestDriver implements Closeable {
                     "Cannot declare topic '" + topicName + "' after multi-partition mode has been activated; "
                             + "declare all multi-partition topics before piping records.");
         }
-        if (partitions < 1) {
-            throw new IllegalArgumentException(
-                    "Partition count must be at least 1 (topic='" + topicName + "', partitions=" + partitions + ").");
-        }
-        final Integer existing = declaredPartitionsByTopic.get(topicName);
-        if (existing != null && existing != partitions) {
-            throw new IllegalArgumentException(
-                    "Topic '" + topicName + "' was already declared with " + existing
-                            + " partitions; cannot redeclare with " + partitions + ".");
-        }
         declaredPartitionsByTopic.put(topicName, partitions);
     }
 
     /**
-     * Activate multi-partition mode. Idempotent. Call this after declaring all multi-partition
-     * topics and before piping records. The single-partition back-compat path auto-activates on first use,
-     * so existing tests do not need to call this method.
+     * Activates multi-partition mode.
+     *
+     * <p>Idempotent. Invoked internally after all topic declarations have been collected
+     * and before records are processed.</p>
      *
      * <p>This builds the sub-topology task graph: for each sub-topology, it constructs its
      * {@link ProcessorTopology}, resolves the partition count of any internal repartition topic
      * (declared explicit count &gt; co-partition group inheritance &gt; max upstream sources &gt;
      * fallback to 1), validates co-partitioning, and computes the per-sub-topology partition count
      * as the max across its source topics.</p>
+     *
+     *  @throws IllegalStateException if multi-partition mode has already been activated
      */
     void activateMultiPartitionMode() {
         if (multiPartitionModeActive) {
-            return;
+            throw new IllegalStateException("Multi-partition mode has already been activated.");
         }
 
         // Plan the multi-partition layout (task sub-topologies, per-topic and per-sub-topology
@@ -912,7 +905,7 @@ public class TopologyTestDriver implements Closeable {
                 producer,
                 testDriverProducer,
                 globalStateManager,
-                multiSubStreamsConfig,
+                streamsConfig,
                 multiSubTaskConfig,
                 multiSubStreamsMetrics,
                 multiSubCache,
@@ -1134,15 +1127,11 @@ public class TopologyTestDriver implements Closeable {
 
     /**
      * Guard for the partition-aware accessors below ({@link #getStateStore(String, int)} and
-     * friends). Unlike the original implementation, this never activates multi-partition mode as a
-     * side effect of what looks like a read-only getter: a {@code getXxx()} method that can silently
-     * rebuild the entire task graph on first call -- and behave differently the second time it's
-     * called -- is surprising and hides a non-trivial effect behind an innocuous-looking signature.
+     * friends).
      *
-     * <p>Multi-partition mode must already be active by the time these accessors are called, either
-     * because {@link TopologyTestDriverBuilder#build()} activated it (at least one declared topic has
-     * more than one partition), or because the caller invoked {@link #activateMultiPartitionMode()}
-     * explicitly. If it isn't, this throws -- it does not activate it for you.
+     * <p>Multi-partition mode must already be active by the time these accessors are called.
+     * If it isn't, this method throws {@link IllegalStateException}; it does not activate
+     * multi-partition mode as a side effect.</p>
      *
      * @throws IllegalStateException if the driver is not operating in multi-partition mode
      */
@@ -1150,17 +1139,17 @@ public class TopologyTestDriver implements Closeable {
         if (!multiPartitionModeActive) {
             throw new IllegalStateException(
                 "This driver is not operating in multi-partition mode. Declare a topic with more than "
-                    + "one partition (via TopologyTestDriverBuilder#declareTopic() or declareTopic()) "
-                    + "and call activateMultiPartitionMode() -- or simply pipe a record first, which "
-                    + "activates it automatically -- before calling partition-aware accessors like "
+                    + "one partition (via TopologyTestDriverBuilder#declareTopic()) "
+                    + "before calling partition-aware accessors like "
                     + "getStateStore(name, partition). Use getStateStore(name) for single-partition mode.");
         }
     }
 
     /**
-     * Internal fully-qualified {@link StateStore} accessor: resolves a store to the task owning
-     * {@code (subtopologyId, partition)}. Package-private -- not part of the KIP-1238 public API;
-     * callers use {@link #getStateStore(String, int)}, which resolves the sub-topology by store name.
+     /**
+     * Resolves a {@link StateStore} to the task owning {@code (subtopologyId, partition)}.
+     * This is used internally by {@link #getStateStore(String, int)}, which resolves the
+     * sub-topology by store name.
      *
      * @param name the store name
      * @param subtopologyId the sub-topology id
@@ -1175,8 +1164,8 @@ public class TopologyTestDriver implements Closeable {
     }
 
     /**
-     * @return the number of partitions of the sub-topology that registers {@code storeName}, or 0
-     *         if no sub-topology registers it (or 1 for a global store).
+     * @return the number of partitions of the sub-topology that registers {@code storeName},
+     *         or {@code 0} if the store does not exist, or {@code 1} for a global store.
      * @throws IllegalStateException if the driver is not operating in multi-partition mode
      */
     int partitionsOf(final String storeName) {
@@ -1185,12 +1174,17 @@ public class TopologyTestDriver implements Closeable {
     }
 
     /**
-     * @return the number of partitions of the given sub-topology, or 0 if the id is unknown.
+     * @return the number of partitions of the given sub-topology.
+     * @throws IllegalArgumentException if the sub-topology id is unknown
      * @throws IllegalStateException if the driver is not operating in multi-partition mode
      */
     int partitionsOfSubtopology(final int subtopologyId) {
         requireMultiPartitionMode();
-        return runtime.partitionsOfSubtopology(subtopologyId);
+        int partitions = runtime.partitionsOfSubtopology(subtopologyId);
+        if(partitions == 0) {
+            throw new IllegalArgumentException("Unknown sub-topology id: " + subtopologyId);
+        }
+        return partitions;
     }
 
     /**
