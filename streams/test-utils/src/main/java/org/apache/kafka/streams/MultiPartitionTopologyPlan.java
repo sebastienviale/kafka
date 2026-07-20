@@ -36,7 +36,7 @@ import java.util.Set;
  * sub-topologies, how many partitions each (input, output, and internal repartition) topic has, and
  * the resulting partition count of each sub-topology. This is pure planning logic — it reads the
  * topology and the user-declared partition counts and produces data structures; it builds no tasks
- * and touches no producer or consumer. {@link TopologyTestDriver#init()} runs {@link #compute()}
+ * and touches no producer or consumer. {@link TopologyTestDriver#activateMultiPartitionMode()} runs {@link #compute()}
  * once and hands the results to the runtime that builds the task graph.
  *
  * <p>The partition count of an internal repartition topic is resolved by a layered rule, highest
@@ -56,7 +56,7 @@ final class MultiPartitionTopologyPlan {
     private final Map<String, Integer> partitionsByTopic;
 
     private final List<Integer> subtopologyIds = new ArrayList<>();
-    private final Map<Integer, ProcessorTopology> subtopologyTopologies = new HashMap<>();
+    private final Map<Integer, ProcessorTopology> processorTopologiesBySubtopology = new HashMap<>();
     private final Map<Integer, Integer> partitionsBySubtopology = new HashMap<>();
     private final Map<String, Integer> subtopologyByInputTopic = new HashMap<>();
     private final Map<String, Integer> sinkTopicToSubtopology = new HashMap<>();
@@ -99,15 +99,15 @@ final class MultiPartitionTopologyPlan {
         return Collections.unmodifiableList(subtopologyIds);
     }
 
-    ProcessorTopology subtopology(final int subtopologyId) {
-        return subtopologyTopologies.get(subtopologyId);
+    ProcessorTopology processorTopology(final int subtopologyId) {
+        return processorTopologiesBySubtopology.get(subtopologyId);
     }
 
     int partitionsOfSubtopology(final int subtopologyId) {
         return partitionsBySubtopology.getOrDefault(subtopologyId, 0);
     }
 
-    int partitionsOfTopic(final String topic) {
+    int partitionsForTopic(final String topic) {
         return partitionsByTopic.getOrDefault(topic, 1);
     }
 
@@ -130,15 +130,15 @@ final class MultiPartitionTopologyPlan {
      */
     private void enumerateTaskSubtopologies() {
         for (final int id : internalTopologyBuilder.nodeGroups().keySet()) {
-            final ProcessorTopology pt = internalTopologyBuilder.buildSubtopology(id);
-            if (!hasNonGlobalSourceTopic(pt, globalSourceTopics)) {
+            final ProcessorTopology processorTopology = internalTopologyBuilder.buildSubtopology(id);
+            if (!hasNonGlobalSourceTopic(processorTopology, globalSourceTopics)) {
                 continue;
             }
             subtopologyIds.add(id);
-            subtopologyTopologies.put(id, pt);
+            processorTopologiesBySubtopology.put(id, processorTopology);
             // A repartition topic is produced by the sub-topology whose sink writes it; remember that
             // mapping so the upstream-max resolution can find the producer.
-            for (final String sink : pt.sinkTopics()) {
+            for (final String sink : processorTopology.sinkTopics()) {
                 sinkTopicToSubtopology.putIfAbsent(sink, id);
             }
         }
@@ -166,10 +166,10 @@ final class MultiPartitionTopologyPlan {
         for (final Map.Entry<String, Integer> entry : explicitRepartitionTopicPartitionCounts().entrySet()) {
             partitionsByTopic.putIfAbsent(entry.getKey(), entry.getValue());
         }
-        for (final int sid : subtopologyIds) {
-            final ProcessorTopology pt = subtopologyTopologies.get(sid);
-            for (final String src : pt.sourceTopics()) {
-                subtopologyByInputTopic.put(src, sid);
+        for (final int subtopologyId : subtopologyIds) {
+            final ProcessorTopology processorTopology = processorTopologiesBySubtopology.get(subtopologyId);
+            for (final String src : processorTopology.sourceTopics()) {
+                subtopologyByInputTopic.put(src, subtopologyId);
                 if (!allInternalRepartitionTopics.contains(src)) {
                     partitionsByTopic.putIfAbsent(src, 1);
                 }
@@ -179,13 +179,13 @@ final class MultiPartitionTopologyPlan {
 
     /** Per-sub-topology partition count = max across its source topics. */
     private void computePartitionsBySubtopology() {
-        for (final int sid : subtopologyIds) {
-            final ProcessorTopology pt = subtopologyTopologies.get(sid);
+        for (final int subtopologyId : subtopologyIds) {
+            final ProcessorTopology processorTopology = processorTopologiesBySubtopology.get(subtopologyId);
             int max = 1;
-            for (final String src : pt.sourceTopics()) {
+            for (final String src : processorTopology.sourceTopics()) {
                 max = Math.max(max, partitionsByTopic.getOrDefault(src, 1));
             }
-            partitionsBySubtopology.put(sid, max);
+            partitionsBySubtopology.put(subtopologyId, max);
         }
     }
 
@@ -255,16 +255,16 @@ final class MultiPartitionTopologyPlan {
     }
 
     private boolean tryResolveFromUpstreamSubtopology(final String topic) {
-        final Integer producerSid = sinkTopicToSubtopology.get(topic);
-        if (producerSid == null) {
+        final Integer producerSubtopologyId = sinkTopicToSubtopology.get(topic);
+        if (producerSubtopologyId == null) {
             return false;
         }
-        final ProcessorTopology pt = subtopologyTopologies.get(producerSid);
-        if (pt == null) {
+        final ProcessorTopology processorTopology = processorTopologiesBySubtopology.get(producerSubtopologyId);
+        if (processorTopology == null) {
             return false;
         }
         Integer max = null;
-        for (final String src : pt.sourceTopics()) {
+        for (final String src : processorTopology.sourceTopics()) {
             final Integer n = partitionsByTopic.get(src);
             if (n == null) {
                 return false;

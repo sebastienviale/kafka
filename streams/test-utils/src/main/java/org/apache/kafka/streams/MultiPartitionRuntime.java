@@ -143,62 +143,57 @@ final class MultiPartitionRuntime {
         final List<TopicPartition> allSourcePartitions = new ArrayList<>();
         final String threadId = Thread.currentThread().getName();
 
-        for (final int sid : plan.subtopologyIds()) {
-            final ProcessorTopology pt = plan.subtopology(sid);
-            if (pt.sourceTopics().isEmpty()) {
-                continue;
-            }
-            final int numPartitions = plan.partitionsOfSubtopology(sid);
+        for (final int subtopologyId : plan.subtopologyIds()) {
+            final ProcessorTopology processorTopology = plan.processorTopology(subtopologyId);
+            final int numPartitions = plan.partitionsOfSubtopology(subtopologyId);
 
             // Register an offset counter for every (source-topic, partition) the sub-topology consumes.
-            for (final String src : pt.sourceTopics()) {
-                final int n = plan.partitionsOfTopic(src);
-                for (int p = 0; p < n; p++) {
-                    final TopicPartition tp = new TopicPartition(src, p);
-                    offsets.putIfAbsent(tp, new AtomicLong());
-                    allSourcePartitions.add(tp);
+            for (final String sourceTopic : processorTopology.sourceTopics()) {
+                final int n = plan.partitionsForTopic(sourceTopic);
+                for (int partition = 0; partition < n; partition++) {
+                    final TopicPartition topicPartition = new TopicPartition(sourceTopic, partition);
+                    offsets.putIfAbsent(topicPartition, new AtomicLong());
+                    allSourcePartitions.add(topicPartition);
                 }
             }
 
-            for (int p = 0; p < numPartitions; p++) {
+            for (int partition = 0; partition < numPartitions; partition++) {
                 // Build a fresh ProcessorTopology per task: ProcessorNode state (sources, processors,
                 // store handles) is single-init and would otherwise throw "The processor is not closed"
                 // when the second task tries to initialize the same instance.
-                final ProcessorTopology freshPt = internalTopologyBuilder.buildSubtopology(sid);
-                buildOneTask(sid, p, freshPt, threadId);
+                final ProcessorTopology freshProcessorTopology = internalTopologyBuilder.buildSubtopology(subtopologyId);
+                buildOneTask(subtopologyId, partition, freshProcessorTopology, threadId);
             }
         }
 
         if (!allSourcePartitions.isEmpty()) {
             consumer.assign(allSourcePartitions);
             final Map<TopicPartition, Long> startOffsets = new HashMap<>();
-            for (final TopicPartition tp : allSourcePartitions) {
-                startOffsets.put(tp, 0L);
+            for (final TopicPartition topicPartition : allSourcePartitions) {
+                startOffsets.put(topicPartition, 0L);
             }
             consumer.updateBeginningOffsets(startOffsets);
             consumer.updateEndOffsets(startOffsets);
         }
     }
 
-    private void buildOneTask(final int sid,
+    private void buildOneTask(final int subtopologyId,
                               final int partition,
-                              final ProcessorTopology pt,
+                              final ProcessorTopology processorTopology,
                               final String threadId) {
-        final TaskId taskId = new TaskId(sid, partition);
+        final TaskId taskId = new TaskId(subtopologyId, partition);
         TaskMetrics.droppedRecordsSensor(threadId, taskId.toString(), streamsMetrics);
 
-        // This task owns partition {@code p} of each source topic that has at least p+1 partitions.
+        // This task is assigned the same partition number from all source topics where that partition exists.
+        // For example, task partition 2 consumes partition 2 from topics with at least 3 partitions.
         final Set<TopicPartition> inputPartitions = new HashSet<>();
-        for (final String src : pt.sourceTopics()) {
-            final int n = plan.partitionsOfTopic(src);
+        for (final String sourceTopic : processorTopology.sourceTopics()) {
+            final int n = plan.partitionsForTopic(sourceTopic);
             if (partition < n) {
-                final TopicPartition tp = new TopicPartition(src, partition);
-                inputPartitions.add(tp);
-                taskByTopicPartition.put(tp, taskId);
+                final TopicPartition topicPartition = new TopicPartition(sourceTopic, partition);
+                inputPartitions.add(topicPartition);
+                taskByTopicPartition.put(topicPartition, taskId);
             }
-        }
-        if (inputPartitions.isEmpty()) {
-            return;
         }
 
         final ProcessorStateManager stateManager = new ProcessorStateManager(
@@ -208,7 +203,7 @@ final class MultiPartitionRuntime {
             streamsConfig.getBoolean(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG),
             logContext,
             stateDirectory,
-            pt.storeToChangelogTopic(),
+            processorTopology.storeToChangelogTopic(),
             new HashSet<>(inputPartitions));
         final RecordCollector recordCollector = new RecordCollectorImpl(
             logContext,
@@ -216,7 +211,7 @@ final class MultiPartitionRuntime {
             testDriverProducer,
             streamsConfig.productionExceptionHandler(),
             streamsMetrics,
-            pt
+            processorTopology
         );
         final InternalProcessorContext<?, ?> context = new ProcessorContextImpl(
             taskId,
@@ -228,7 +223,7 @@ final class MultiPartitionRuntime {
         final StreamTask task = new StreamTask(
             taskId,
             new HashSet<>(inputPartitions),
-            pt,
+            processorTopology,
             consumer,
             taskConfig,
             streamsMetrics,
@@ -253,7 +248,7 @@ final class MultiPartitionRuntime {
      * {@code BuiltInPartitioner.partitionForKey}; null key or n == 1 routes to partition 0.
      */
     private int resolvePartition(final String topic, final byte[] keyBytes, final int explicit) {
-        final int n = Math.max(1, plan.partitionsOfTopic(topic));
+        final int n = Math.max(1, plan.partitionsForTopic(topic));
         // A negative explicit partition is the "unset" sentinel (TestRecord default): route by key instead.
         if (explicit >= 0) {
             if (explicit >= n) {
@@ -284,33 +279,35 @@ final class MultiPartitionRuntime {
                     final byte[] value,
                     final Headers headers,
                     final int explicitPartition) {
-        final boolean isTaskInput = (plan.subtopologyForInputTopic(topicName) != null);
+        final boolean isTaskInput = plan.subtopologyForInputTopic(topicName) != null;
         final TopicPartition globalPartition = host.globalPartitionOrNull(topicName);
         final boolean isGlobal = globalPartition != null;
-        if (!isTaskInput && !isGlobal) {
-            throw new IllegalArgumentException("Unknown topic: " + topicName);
+        if (isTaskInput && isGlobal) {
+            throw new IllegalStateException(
+                "Topic cannot be both an input topic and a global store topic: " + topicName);
         }
         if (isTaskInput) {
             final int partition = resolvePartition(topicName, key, explicitPartition);
             enqueueTaskRecord(topicName, new TopicPartition(topicName, partition),
                 timestamp, key, value, headers);
             completeAllProcessableWork();
-        }
-        if (isGlobal) {
+        } else if (isGlobal) {
             host.processGlobalRecord(globalPartition, timestamp, key, value, headers);
+        } else {
+            throw new IllegalArgumentException("Unknown topic: " + topicName);
         }
     }
 
     private void enqueueTaskRecord(final String topic,
-                                   final TopicPartition tp,
+                                   final TopicPartition topicPartition,
                                    final long timestamp,
                                    final byte[] key,
                                    final byte[] value,
                                    final Headers headers) {
-        final TaskId taskId = taskByTopicPartition.get(tp);
+        final TaskId taskId = taskByTopicPartition.get(topicPartition);
         if (taskId == null) {
             throw new IllegalStateException(
-                "No task owns " + tp + ". This typically means init() was not called or the topic "
+                "No task owns " + topicPartition + ". This typically means init() was not called or the topic "
                     + "was not declared with enough partitions.");
         }
         final StreamTask owner = tasks.get(taskId);
@@ -318,10 +315,10 @@ final class MultiPartitionRuntime {
             throw new IllegalStateException("Task " + taskId + " is registered but no StreamTask exists for it.");
         }
         final long offset = offsets
-            .computeIfAbsent(tp, k -> new AtomicLong())
+            .computeIfAbsent(topicPartition, k -> new AtomicLong())
             .getAndIncrement();
-        owner.addRecords(tp, Collections.singleton(new ConsumerRecord<>(
-            topic, tp.partition(), offset, timestamp, TimestampType.CREATE_TIME,
+        owner.addRecords(topicPartition, Collections.singleton(new ConsumerRecord<>(
+            topicPartition.topic(), topicPartition.partition(), offset, timestamp, TimestampType.CREATE_TIME,
             key == null ? ConsumerRecord.NULL_SIZE : key.length,
             value == null ? ConsumerRecord.NULL_SIZE : value.length,
             key, value, headers, Optional.empty())));
@@ -333,9 +330,6 @@ final class MultiPartitionRuntime {
      */
     void completeAllProcessableWork() {
         captureOutputs();
-        if (tasks.isEmpty()) {
-            return;
-        }
         StreamTask next;
         while ((next = pickNextProcessableTask()) != null) {
             next.resumePollingForPartitionsWithAvailableSpace();
@@ -433,19 +427,19 @@ final class MultiPartitionRuntime {
                 return gs;
             }
         }
-        final Integer sid = subtopologyOwningStore(name);
-        if (sid == null) {
+        final Integer subtopologyId = subtopologyOwningStore(name);
+        if (subtopologyId == null) {
             return null;
         }
-        final int declaredPartitions = plan.partitionsOfSubtopology(sid);
+        final int declaredPartitions = plan.partitionsOfSubtopology(subtopologyId);
         if (declaredPartitions > 1) {
             throw new IllegalStateException(
-                    "Store '" + name + "' is registered in sub-topology " + sid + ", which is declared "
+                    "Store '" + name + "' is registered in sub-topology " + subtopologyId + ", which is declared "
                             + "with " + declaredPartitions + " partitions; no single partition can be inferred. "
                             + "Use getStateStore(name, partition) to access a specific partition.");
         }
         // declaredPartitions == 1: exactly one task exists for this sub-topology (partition 0).
-        final StreamTask only = tasks.get(new TaskId(sid, 0));
+        final StreamTask only = tasks.get(new TaskId(subtopologyId, 0));
         if (only == null) {
             return null;
         }
@@ -465,13 +459,13 @@ final class MultiPartitionRuntime {
             if (s == null) {
                 continue;
             }
-            final int sid = t.id().subtopology();
-            if (found != null && found != sid) {
+            final int subtopologyId = t.id().subtopology();
+            if (found != null && found != subtopologyId) {
                 throw new IllegalStateException(
                     "Store '" + name + "' is registered in more than one sub-topology ("
-                        + found + " and " + sid + ").");
+                        + found + " and " + subtopologyId + ").");
             }
-            found = sid;
+            found = subtopologyId;
         }
         return found;
     }
@@ -492,11 +486,11 @@ final class MultiPartitionRuntime {
                 return gs;
             }
         }
-        final Integer sid = subtopologyOwningStore(name);
-        if (sid == null) {
+        final Integer subtopologyId = subtopologyOwningStore(name);
+        if (subtopologyId == null) {
             return null;
         }
-        return getStateStore(name, sid, partition);
+        return getStateStore(name, subtopologyId, partition);
     }
 
     /**
@@ -530,8 +524,8 @@ final class MultiPartitionRuntime {
         if (globalStateManager != null && globalStateManager.store(storeName) != null) {
             return 1;
         }
-        final Integer sid = subtopologyOwningStore(storeName);
-        return sid == null ? 0 : plan.partitionsOfSubtopology(sid);
+        final Integer subtopologyId = subtopologyOwningStore(storeName);
+        return subtopologyId == null ? 0 : plan.partitionsOfSubtopology(subtopologyId);
     }
 
     /**
